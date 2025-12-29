@@ -36,7 +36,7 @@ export default function RootLayout({
           <AudioController />
           <RecentTracker />
           <Header />
-          <main className="mx-auto max-w-5xl px-4 pb-28 pt-6">{children}</main>
+          <main className="mx-auto max-w-5xl px-4 pb-[calc(env(safe-area-inset-bottom)+10rem)] pt-6">{children}</main>
           <PlayerBar />
           <Toaster />
         </ThemeProvider>

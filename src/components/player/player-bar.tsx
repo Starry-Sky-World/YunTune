@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FileText, ListMusic, Pause, Play, Repeat, Repeat1, SkipBack, SkipForward, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Artwork } from "@/components/player/artwork";
 import { cn } from "@/lib/utils";
 import { usePlayerStore } from "@/store/player";
 
@@ -24,6 +25,7 @@ export function PlayerBar() {
   const volume = usePlayerStore((s) => s.volume);
   const loopMode = usePlayerStore((s) => s.loopMode);
   const requiresGesture = usePlayerStore((s) => s.requiresGesture);
+  const lastError = usePlayerStore((s) => s.lastError);
 
   const togglePlay = usePlayerStore((s) => s.togglePlay);
   const prev = usePlayerStore((s) => s.prev);
@@ -39,20 +41,25 @@ export function PlayerBar() {
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-40 border-t border-black/10 bg-white/70 backdrop-blur dark:border-white/10 dark:bg-black/50">
-      <div className="mx-auto max-w-5xl px-4 py-3">
+      <div className="mx-auto max-w-5xl px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3">
         <div className="flex items-center gap-3">
           <button
             type="button"
             className={cn("min-w-0 flex-1 text-left", !track && "pointer-events-none opacity-60")}
             onClick={() => router.push("/player")}
           >
-            <div className="truncate text-sm font-medium">{track?.name ?? "未在播放"}</div>
-            <div className="truncate text-xs text-black/60 dark:text-white/60">
-              {track ? track.artists.map((a) => a.name).join(" / ") : "选择一首歌开始播放"}
+            <div className="flex items-center gap-3">
+              <Artwork src={track?.album?.picUrl} alt={track?.album?.name ?? track?.name ?? "Artwork"} size={40} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">{track?.name ?? "未在播放"}</div>
+                <div className="truncate text-xs text-black/60 dark:text-white/60">
+                  {track ? track.artists.map((a) => a.name).join(" / ") : "选择一首歌开始播放"}
+                </div>
+              </div>
             </div>
           </button>
 
-          <div className="hidden items-center gap-2 sm:flex">
+          <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" onClick={prev} aria-label="Previous">
               <SkipBack className="h-5 w-5" />
             </Button>
@@ -135,8 +142,10 @@ export function PlayerBar() {
             />
           </div>
 
-          <div className={cn(requiresGesture ? "text-amber-600 dark:text-amber-300" : "opacity-0")}>
-            {requiresGesture ? (
+          <div className={cn(requiresGesture || lastError ? "text-amber-600 dark:text-amber-300" : "opacity-0")}>
+            {lastError ? (
+              <span className="truncate">播放失败：{lastError}</span>
+            ) : requiresGesture ? (
               <span>
                 需要点击播放 <Link className="underline underline-offset-4" href="/player">打开播放器</Link>
               </span>

@@ -12,15 +12,36 @@ type LyricRes =
   | { ok: true; data: { id: number; lrc: string; tlyric: string; nolyric: boolean; pureMusic: boolean } }
   | { ok: false; error: { code: string; message: string } };
 
-export function LyricPanel() {
+type ViewLine = { timeSec: number; text: string; subText?: string };
+
+function toCs(sec: number) {
+  return Math.round(sec * 100);
+}
+
+function mergeLyric(main: LrcLine[], translated: LrcLine[]): ViewLine[] {
+  const tMap = new Map<number, string>();
+  for (const l of translated) {
+    const key = toCs(l.timeSec);
+    if (!tMap.has(key) && l.text) tMap.set(key, l.text);
+  }
+  return main.map((l) => {
+    const subText = tMap.get(toCs(l.timeSec));
+    return { timeSec: l.timeSec, text: l.text, subText: subText && subText !== l.text ? subText : undefined };
+  });
+}
+
+export function LyricPanel({ className }: { className?: string }) {
   const track = usePlayerStore((s) => s.currentTrack());
   const time = usePlayerStore((s) => s.progressSec);
 
-  const [lines, setLines] = React.useState<LrcLine[]>([]);
+  const [lines, setLines] = React.useState<ViewLine[]>([]);
   const [meta, setMeta] = React.useState<{ nolyric: boolean; pureMusic: boolean } | null>(null);
   const [manualScroll, setManualScroll] = React.useState(false);
 
-  const activeIdx = React.useMemo(() => findActiveLineIndex(lines, time), [lines, time]);
+  const activeIdx = React.useMemo(
+    () => findActiveLineIndex(lines.map((l) => ({ timeSec: l.timeSec, text: l.text })), time),
+    [lines, time],
+  );
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const lineRefs = React.useRef<Map<number, HTMLDivElement>>(new Map());
 
@@ -40,7 +61,9 @@ export function LyricPanel() {
         return;
       }
       setMeta({ nolyric: json.data.nolyric, pureMusic: json.data.pureMusic });
-      setLines(parseLrc(json.data.lrc || ""));
+      const main = parseLrc(json.data.lrc || "");
+      const translated = parseLrc(json.data.tlyric || "");
+      setLines(mergeLyric(main, translated));
     };
     void run();
     return () => ac.abort();
@@ -56,10 +79,14 @@ export function LyricPanel() {
   }, [activeIdx, manualScroll]);
 
   return (
-    <Card className="relative p-0">
+    <Card className={cn("relative overflow-hidden p-0", className)}>
       <div
         ref={containerRef}
-        className="max-h-[55vh] overflow-auto px-4 py-5"
+        className="max-h-[62vh] overflow-auto px-4 py-10"
+        style={{
+          WebkitMaskImage: "linear-gradient(to bottom, transparent, black 10%, black 90%, transparent)",
+          maskImage: "linear-gradient(to bottom, transparent, black 10%, black 90%, transparent)",
+        }}
         onScroll={() => {
           setManualScroll(true);
           window.clearTimeout((LyricPanel as any)._t);
@@ -73,22 +100,47 @@ export function LyricPanel() {
             {meta?.pureMusic ? "纯音乐，请欣赏" : "暂无歌词"}
           </div>
         ) : (
-          <div className="space-y-3">
-            {lines.map((l, idx) => (
-              <div
-                key={`${l.timeSec}-${idx}`}
-                ref={(node) => {
-                  if (!node) return;
-                  lineRefs.current.set(idx, node);
-                }}
-                className={cn(
-                  "text-sm leading-relaxed transition",
-                  idx === activeIdx ? "text-black dark:text-white" : "text-black/45 dark:text-white/45",
-                )}
-              >
-                {l.text || "…"}
-              </div>
-            ))}
+          <div className="space-y-5 text-center">
+            {lines.map((l, idx) => {
+              const active = idx === activeIdx;
+              return (
+                <div
+                  key={`${l.timeSec}-${idx}`}
+                  ref={(node) => {
+                    if (!node) return;
+                    lineRefs.current.set(idx, node);
+                  }}
+                >
+                  <button
+                    type="button"
+                    aria-current={active}
+                    className={cn(
+                      "w-full select-none rounded-2xl px-2 py-1 text-balance transition-all will-change-transform",
+                      active
+                        ? "scale-[1.02] text-[22px] font-semibold leading-snug text-black dark:text-white sm:text-[24px]"
+                        : "text-[16px] font-medium leading-snug text-black/45 hover:text-black/70 dark:text-white/40 dark:hover:text-white/70",
+                    )}
+                    onClick={() => {
+                      usePlayerStore.setState({ progressSec: l.timeSec });
+                      window.dispatchEvent(new CustomEvent("yuntune-seek", { detail: l.timeSec }));
+                      setManualScroll(false);
+                    }}
+                  >
+                    {l.text || "…"}
+                  </button>
+                  {l.subText ? (
+                    <div
+                      className={cn(
+                        "mt-1 text-sm leading-snug",
+                        active ? "text-black/70 dark:text-white/70" : "text-black/35 dark:text-white/35",
+                      )}
+                    >
+                      {l.subText}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -109,4 +161,3 @@ export function LyricPanel() {
     </Card>
   );
 }
-
